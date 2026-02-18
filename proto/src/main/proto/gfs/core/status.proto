@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package gfs;
+
+option java_package = "gfs.proto";
+option java_multiple_files = true;
+
+enum StatusCode {
+  OK = 0;
+  NOT_FOUND = 1;          // File/directory doesn't exist, or chunk has no replicas
+  ALREADY_EXISTS = 2;     // CreateFile/Mkdir for a path that already exists
+  INTERNAL_ERROR = 3;     // Unexpected server-side failure (disk I/O, corruption, etc.)
+  STALE_CHUNK = 4;        // Chunkserver's version is behind — it missed mutations while down
+  LEASE_EXPIRED = 5;      // Primary's lease timed out; client must re-request from master
+  NO_LEASE = 6;           // No primary assigned for this chunk yet; master needs to grant one
+  CHUNK_FULL = 7;         // Record append: chunk can't fit this append, client retries on next chunk
+  NOT_PRIMARY = 8;        // WriteMutation sent to a chunkserver that isn't the current primary
+  INVALID_ARGUMENT = 9;   // Malformed request (negative offset, empty path, etc.)
+}
+
+message Status {
+  StatusCode code = 1;
+  string message = 2;
+}

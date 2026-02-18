@@ -1,0 +1,69 @@
+syntax = "proto3";
+
+package gfs;
+
+import "gfs/core/chunk.proto";
+
+option java_package = "gfs.proto";
+option java_multiple_files = true;
+
+enum OperationType {
+  OP_CREATE_FILE = 0;
+  OP_DELETE_FILE = 1;
+  OP_CREATE_DIRECTORY = 2;
+  OP_RENAME_FILE = 3;
+  OP_ALLOCATE_CHUNK = 4;
+  OP_CREATE_SNAPSHOT = 5;
+  OP_SET_REPLICATION = 6;
+}
+
+message OperationLogEntry {
+  int64 sequence_number = 1;
+  int64 timestamp = 2;
+  OperationType type = 3;
+
+  oneof operation {
+    CreateFileOp create_file = 10;
+    DeleteFileOp delete_file = 11;
+    CreateDirectoryOp create_directory = 12;
+    RenameFileOp rename_file = 13;
+    AllocateChunkOp allocate_chunk = 14;
+    CreateSnapshotOp create_snapshot = 15;
+    SetReplicationOp set_replication = 16;
+  }
+}
+
+message CreateFileOp {
+  string path = 1;
+  int32 replication_factor = 2;
+}
+
+message DeleteFileOp {
+  string path = 1;
+}
+
+message CreateDirectoryOp {
+  string path = 1;
+}
+
+message RenameFileOp {
+  string source_path = 1;
+  string dest_path = 2;
+}
+
+message AllocateChunkOp {
+  string path = 1;
+  int64 chunk_index = 2;
+  ChunkReference chunk = 3;
+  repeated ChunkServerAddress initial_locations = 4;
+}
+
+message CreateSnapshotOp {
+  string source_path = 1;
+  string dest_path = 2;
+}
+
+message SetReplicationOp {
+  string path = 1;
+  int32 replication_factor = 2;
+}

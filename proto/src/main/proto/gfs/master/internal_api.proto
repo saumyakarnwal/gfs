@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+package gfs;
+
+import "gfs/core/status.proto";
+import "gfs/core/chunk.proto";
+import "gfs/core/lease.proto";
+
+option java_package = "gfs.proto";
+option java_multiple_files = true;
+
+service MasterChunkServerService {
+  rpc RegisterChunkServer(RegisterChunkServerRequest) returns (RegisterChunkServerResponse);
+  rpc SendHeartbeat(SendHeartbeatRequest) returns (SendHeartbeatResponse);
+  rpc ExtendLease(ExtendLeaseRequest) returns (ExtendLeaseResponse);
+}
+
+message ChunkReport {
+  ChunkReference chunk = 1;
+  int64 size_bytes = 2;
+}
+
+message RegisterChunkServerRequest {
+  ChunkServerAddress chunkserver = 1;
+  repeated ChunkReport chunks = 2;
+  int64 available_bytes = 3;  // Free disk space; master uses this for placement decisions
+}
+message RegisterChunkServerResponse {
+  Status status = 1;
+}
+
+message SendHeartbeatRequest {
+  ChunkServerAddress chunkserver = 1;
+  repeated ChunkReport chunks = 2;
+  bool is_full_report = 3;
+  int64 available_bytes = 4;
+}
+message SendHeartbeatResponse {
+  repeated ChunkServerInstruction instructions = 1;
+  repeated LeaseGrant leases_granted = 2;
+}
+
+// Lease — primary chunkserver requests extension from master
+
+message ExtendLeaseRequest {
+  ChunkReference chunk = 1;
+  ChunkServerAddress chunkserver = 2;
+}
+message ExtendLeaseResponse {
+  Status status = 1;
+  int64 new_expiration_timestamp = 2;
+}
+
+// Instruction types — sent from master to chunkserver via heartbeat responses
+
+message ChunkServerInstruction {
+  oneof instruction {
+    DeleteChunkInstruction delete_chunk = 1;
+    ReReplicateInstruction re_replicate = 2;
+    InvalidateChunkInstruction invalidate_chunk = 3;
+  }
+}
+
+message DeleteChunkInstruction {
+  ChunkReference chunk = 1;
+}
+
+message ReReplicateInstruction {
+  ChunkReference chunk = 1;
+  ChunkServerAddress source = 2;
+}
+
+message InvalidateChunkInstruction {
+  ChunkReference chunk = 1;
+}

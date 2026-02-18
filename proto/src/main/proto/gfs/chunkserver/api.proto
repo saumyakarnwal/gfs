@@ -1,0 +1,103 @@
+syntax = "proto3";
+
+package gfs;
+
+import "gfs/core/status.proto";
+import "gfs/core/chunk.proto";
+import "gfs/core/mutation.proto";
+
+option java_package = "gfs.proto";
+option java_multiple_files = true;
+
+service ChunkServerService {
+
+  // Read
+  rpc ReadChunk(ReadChunkRequest) returns (ReadChunkResponse);
+
+  // Write (two-phase: push data, then commit via primary)
+  rpc PushData(PushDataRequest) returns (PushDataResponse);
+  rpc CommitMutation(CommitMutationRequest) returns (CommitMutationResponse);
+  rpc ApplyMutation(ApplyMutationRequest) returns (ApplyMutationResponse);
+
+  // Chunk management
+  rpc CreateChunk(CreateChunkRequest) returns (CreateChunkResponse);
+  rpc DeleteChunk(DeleteChunkRequest) returns (DeleteChunkResponse);
+  rpc CopyChunk(CopyChunkRequest) returns (CopyChunkResponse);
+}
+
+// Read
+
+message ReadChunkRequest {
+  ChunkReference chunk = 1;
+  int64 offset = 2;
+  int32 length = 3;
+}
+
+message ReadChunkResponse {
+  Status status = 1;
+  bytes data = 2;
+  int64 bytes_read = 3;
+}
+
+// Data Push (step 1 of write)
+
+message PushDataRequest {
+  string data_id = 1;
+  bytes data = 2;
+  repeated ChunkServerAddress forward_to = 3;
+}
+
+message PushDataResponse {
+  Status status = 1;
+}
+
+// Commit Mutation (step 2 — client tells primary to serialize and execute)
+
+message CommitMutationRequest {
+  MutationType type = 1;
+  ChunkReference chunk = 2;
+  string data_id = 3;
+  int64 offset = 4;  // For WRITE only; ignored for APPEND
+}
+
+message CommitMutationResponse {
+  Status status = 1;
+  int64 offset = 2;  // For APPEND: the assigned write offset
+}
+
+// Apply Mutation (step 3 — primary tells secondaries to execute in serial order)
+
+message ApplyMutationRequest {
+  Mutation mutation = 1;
+}
+
+message ApplyMutationResponse {
+  Status status = 1;
+}
+
+// Chunk Management
+
+message CreateChunkRequest {
+  ChunkReference chunk = 1;
+}
+
+message CreateChunkResponse {
+  Status status = 1;
+}
+
+message DeleteChunkRequest {
+  ChunkReference chunk = 1;
+}
+
+message DeleteChunkResponse {
+  Status status = 1;
+}
+
+message CopyChunkRequest {
+  ChunkReference chunk = 1;
+  ChunkServerAddress source = 2;
+}
+
+message CopyChunkResponse {
+  Status status = 1;
+}

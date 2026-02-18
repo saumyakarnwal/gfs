@@ -1,0 +1,108 @@
+syntax = "proto3";
+
+package gfs;
+
+import "gfs/core/status.proto";
+import "gfs/core/chunk.proto";
+import "gfs/core/file.proto";
+import "gfs/core/lease.proto";
+
+option java_package = "gfs.proto";
+option java_multiple_files = true;
+
+service MasterService {
+
+  // Namespace operations
+  rpc CreateFile(CreateFileRequest) returns (CreateFileResponse);
+  rpc DeleteFile(DeleteFileRequest) returns (DeleteFileResponse);
+  rpc RenameFile(RenameFileRequest) returns (RenameFileResponse);
+  rpc CreateDirectory(CreateDirectoryRequest) returns (CreateDirectoryResponse);
+  rpc ListDirectory(ListDirectoryRequest) returns (ListDirectoryResponse);
+  rpc GetFileInfo(GetFileInfoRequest) returns (GetFileInfoResponse);
+  rpc CreateSnapshot(CreateSnapshotRequest) returns (CreateSnapshotResponse);
+
+  // Read — client asks "where is the data for this file at this offset?"
+  rpc GetChunkLocations(GetChunkLocationsRequest) returns (GetChunkLocationsResponse);
+
+  // Write — client asks "who do I write to for this file at this offset?"
+  rpc GetWriteTarget(GetWriteTargetRequest) returns (GetWriteTargetResponse);
+}
+
+// Namespace
+
+message CreateFileRequest {
+  string path = 1;
+  int32 replication_factor = 2;
+}
+message CreateFileResponse {
+  Status status = 1;
+}
+
+message DeleteFileRequest {
+  string path = 1;
+}
+message DeleteFileResponse {
+  Status status = 1;
+}
+
+message RenameFileRequest {
+  string source_path = 1;
+  string dest_path = 2;
+}
+message RenameFileResponse {
+  Status status = 1;
+}
+
+message CreateDirectoryRequest {
+  string path = 1;
+}
+message CreateDirectoryResponse {
+  Status status = 1;
+}
+
+message ListDirectoryRequest {
+  string path = 1;
+}
+message ListDirectoryResponse {
+  Status status = 1;
+  repeated FileInfo entries = 2;
+}
+
+message GetFileInfoRequest {
+  string path = 1;
+}
+message GetFileInfoResponse {
+  Status status = 1;
+  FileInfo file_info = 2;
+}
+
+message CreateSnapshotRequest {
+  string source_path = 1;
+  string dest_path = 2;  // Snapshot is a regular file; restore via RenameFile(dest_path, source_path)
+}
+message CreateSnapshotResponse {
+  Status status = 1;
+}
+
+// Read
+
+message GetChunkLocationsRequest {
+  string path = 1;
+  int64 offset = 2;
+  int64 length = 3;
+}
+message GetChunkLocationsResponse {
+  Status status = 1;
+  repeated ChunkInfo chunks = 2;
+}
+
+// Write
+
+message GetWriteTargetRequest {
+  string path = 1;
+  int64 offset = 2;
+}
+message GetWriteTargetResponse {
+  Status status = 1;
+  LeaseGrant lease = 2;
+}

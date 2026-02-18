@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package gfs;
+
+import "gfs/core/chunk.proto";
+
+option java_package = "gfs.proto";
+option java_multiple_files = true;
+
+enum MutationType {
+  WRITE = 0;
+  RECORD_APPEND = 1;
+}
+
+message Mutation {
+  MutationType type = 1;
+  ChunkReference chunk = 2;
+  int64 offset = 3;
+  bytes data = 4;
+  int64 serial_number = 5;
+}

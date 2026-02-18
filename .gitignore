@@ -1,0 +1,24 @@
+# Build
+build/
+.gradle/
+out/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# Gradle
+gradle-app.setting
+!gradle-wrapper.jar
+!gradle-wrapper.properties
+
+# Proto generated files
+proto/build/
+
+# GFS runtime data
+/tmp/gfs/
+
+# Learning notes
+**/WHY.md
