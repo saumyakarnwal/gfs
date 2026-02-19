@@ -11,11 +11,11 @@ plugins {
 }
 
 dependencies {
-    implementation("com.google.protobuf:protobuf-kotlin:$protobufVersion")
-    implementation("io.grpc:grpc-protobuf:$grpcVersion")
-    implementation("io.grpc:grpc-stub:$grpcVersion")
-    implementation("io.grpc:grpc-kotlin-stub:$grpcKotlinVersion")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutinesVersion")
+    api("com.google.protobuf:protobuf-kotlin:$protobufVersion")
+    api("io.grpc:grpc-protobuf:$grpcVersion")
+    api("io.grpc:grpc-stub:$grpcVersion")
+    api("io.grpc:grpc-kotlin-stub:$grpcKotlinVersion")
+    api("org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutinesVersion")
     compileOnly("org.apache.tomcat:annotations-api:6.0.53")
 }
 

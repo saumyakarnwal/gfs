@@ -6,6 +6,7 @@ import "gfs/core/status.proto";
 import "gfs/core/chunk.proto";
 import "gfs/core/file.proto";
 import "gfs/core/lease.proto";
+import "gfs/core/mutation.proto";
 
 option java_package = "gfs.proto";
 option java_multiple_files = true;
@@ -20,6 +21,7 @@ service MasterService {
   rpc ListDirectory(ListDirectoryRequest) returns (ListDirectoryResponse);
   rpc GetFileInfo(GetFileInfoRequest) returns (GetFileInfoResponse);
   rpc CreateSnapshot(CreateSnapshotRequest) returns (CreateSnapshotResponse);
+  rpc SetReplication(SetReplicationRequest) returns (SetReplicationResponse);
 
   // Read — client asks "where is the data for this file at this offset?"
   rpc GetChunkLocations(GetChunkLocationsRequest) returns (GetChunkLocationsResponse);
@@ -36,6 +38,7 @@ message CreateFileRequest {
 }
 message CreateFileResponse {
   Status status = 1;
+  FileInfo file_info = 2;
 }
 
 message DeleteFileRequest {
@@ -101,8 +104,20 @@ message GetChunkLocationsResponse {
 message GetWriteTargetRequest {
   string path = 1;
   int64 offset = 2;
+  MutationType mutation_type = 3;
 }
 message GetWriteTargetResponse {
   Status status = 1;
   LeaseGrant lease = 2;
+}
+
+// Replication
+
+message SetReplicationRequest {
+  string path = 1;
+  int32 replication_factor = 2;
+}
+message SetReplicationResponse {
+  Status status = 1;
+  int32 previous_replication_factor = 2;
 }
