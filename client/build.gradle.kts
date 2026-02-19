@@ -4,9 +4,11 @@ plugins {
 }
 
 application {
-    mainClass.set("gfs.client.GfsClientKt")
+    mainClass.set("gfs.client.GfsCliKt")
 }
 
 dependencies {
     implementation(project(":common"))
+
+    testImplementation(kotlin("test"))
 }
