@@ -87,7 +87,7 @@ class MasterServer(
         val getWriteTarget = GetWriteTarget(
             namespaceTree, chunkManager, chunkServerRegistry, leaseManager, operationLog
         )
-        val createSnapshot = CreateSnapshot()
+        val createSnapshot = CreateSnapshot(namespaceTree, chunkManager, operationLog)
         val setReplication = SetReplication(namespaceTree, operationLog)
 
         val masterService = MasterService(
@@ -181,7 +181,22 @@ class MasterServer(
                     namespaceTree.setReplicationFactor(op.path, op.replicationFactor)
                 }
                 OperationType.OP_CREATE_SNAPSHOT -> {
-                    logger.warning("Skipping unimplemented operation: ${entry.type}")
+                    val op = entry.createSnapshot
+                    val sourceNode = namespaceTree.getNode(op.sourcePath) ?: return
+                    namespaceTree.createFile(op.destPath, sourceNode.replicationFactor)
+                    for (handle in sourceNode.chunkHandles) {
+                        val meta = chunkManager.getChunkMetadata(handle) ?: continue
+                        chunkManager.incrementRefCount(handle)
+                        chunkManager.addChunkToFile(op.destPath, handle, meta.chunkIndex)
+                        namespaceTree.addChunkHandle(op.destPath, handle)
+                    }
+                }
+                OperationType.OP_COPY_ON_WRITE -> {
+                    val op = entry.copyOnWrite
+                    chunkManager.allocateChunk(op.path, op.chunkIndex)
+                    namespaceTree.replaceChunkHandle(op.path, op.chunkIndex, op.oldHandle, op.newHandle)
+                    chunkManager.replaceChunkForFile(op.path, op.chunkIndex, op.oldHandle, op.newHandle)
+                    chunkManager.decrementRefCount(op.oldHandle)
                 }
                 else -> {
                     logger.warning("Unknown operation type: ${entry.type}")

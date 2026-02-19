@@ -17,4 +17,14 @@ interface ChunkManager {
     fun getAllChunks(): Collection<ChunkMetadata>
 
     fun restoreFrom(chunks: Collection<ChunkMetadata>, nextHandle: Long)
+
+    fun incrementRefCount(handle: Long): Int
+
+    fun decrementRefCount(handle: Long): Int
+
+    fun addChunkToFile(filePath: String, handle: Long, chunkIndex: Int)
+
+    fun removeChunk(handle: Long)
+
+    fun replaceChunkForFile(filePath: String, chunkIndex: Int, oldHandle: Long, newHandle: Long)
 }

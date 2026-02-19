@@ -58,6 +58,7 @@ message CommitMutationRequest {
   ChunkReference chunk = 2;
   string data_id = 3;
   int64 offset = 4;  // For WRITE only; ignored for APPEND
+  repeated ChunkServerAddress secondaries = 5;
 }
 
 message CommitMutationResponse {

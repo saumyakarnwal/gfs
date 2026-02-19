@@ -41,7 +41,6 @@ class CommitMutation(
             MutationType.RECORD_APPEND -> {
                 val currentSize = chunkStorage.getChunkSize(chunkHandle)
                 if (currentSize + data.size > GfsConfig.CHUNK_SIZE_BYTES) {
-                    // Pad the chunk and return CHUNK_FULL
                     return CommitMutationResponse.newBuilder()
                         .setStatus(status(StatusCode.CHUNK_FULL, "Chunk $chunkHandle is full"))
                         .build()
@@ -64,7 +63,7 @@ class CommitMutation(
                 .build()
         }
 
-        // Build mutation for secondaries
+        // Forward to secondaries via ApplyMutation
         val mutation = Mutation.newBuilder()
             .setType(mutationType)
             .setChunk(request.chunk)
@@ -73,8 +72,10 @@ class CommitMutation(
             .setSerialNumber(serialNumber)
             .build()
 
-        // TODO: Forward to secondaries via ApplyMutation
-        // For now, secondaries are reached via the lease info the client has
+        val secondaryFailures = forwardToSecondaries(mutation, request.secondariesList)
+        if (secondaryFailures.isNotEmpty()) {
+            logger.warning("Secondary failures for chunk $chunkHandle: $secondaryFailures")
+        }
 
         pushData.removeData(dataId)
 
@@ -82,5 +83,38 @@ class CommitMutation(
             .setStatus(okStatus("Mutation committed"))
             .setOffset(offset)
             .build()
+    }
+
+    private fun forwardToSecondaries(
+        mutation: Mutation,
+        secondaries: List<ChunkServerAddress>
+    ): List<String> {
+        val failures = mutableListOf<String>()
+        val applyRequest = ApplyMutationRequest.newBuilder()
+            .setMutation(mutation)
+            .build()
+
+        for (secondary in secondaries) {
+            try {
+                val channel = ManagedChannelBuilder
+                    .forTarget(secondary.endpoint)
+                    .usePlaintext()
+                    .build()
+                try {
+                    val stub = ChunkServerServiceGrpc.newBlockingStub(channel)
+                    val resp = stub.applyMutation(applyRequest)
+                    if (resp.status.code != StatusCode.OK) {
+                        failures.add("${secondary.endpoint}: ${resp.status.message}")
+                    }
+                } finally {
+                    channel.shutdown()
+                }
+            } catch (e: Exception) {
+                logger.log(Level.WARNING, "Failed to forward to ${secondary.endpoint}", e)
+                failures.add("${secondary.endpoint}: ${e.message}")
+            }
+        }
+
+        return failures
     }
 }

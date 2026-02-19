@@ -94,6 +94,12 @@ fun main(args: Array<String>) {
                 readData(client, path, offset, length)
             }
 
+            "snapshot", "snap" -> {
+                require(args.size >= 3) { "Usage: snapshot <source> <dest>" }
+                val resp = client.snapshot(args[1], args[2])
+                println(formatStatus(resp.status.code, resp.status.message))
+            }
+
             else -> {
                 println("Unknown command: ${args[0]}")
                 printUsage()
@@ -125,8 +131,8 @@ private fun writeData(client: GfsClient, path: String, data: ByteArray, type: Mu
         return
     }
 
-    // Step 3: Tell primary to commit
-    val commitResp = client.commitMutation(primary.endpoint, type, lease.chunk, dataId, offset)
+    // Step 3: Tell primary to commit (pass secondaries so primary can forward)
+    val commitResp = client.commitMutation(primary.endpoint, type, lease.chunk, dataId, offset, secondaries)
     if (commitResp.status.code != StatusCode.OK) {
         println("CommitMutation failed: ${commitResp.status.message}")
         return
@@ -219,5 +225,6 @@ private fun printUsage() {
           put    <path> <data>             Write data to a file
           append <path> <data>             Append data to a file
           get    <path> [offset] [length]  Read data from a file
+          snapshot <source> <dest>         Create a snapshot (copy-on-write)
     """.trimIndent())
 }

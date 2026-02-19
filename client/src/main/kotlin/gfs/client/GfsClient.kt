@@ -148,7 +148,8 @@ class GfsClient(
         type: MutationType,
         chunk: ChunkReference,
         dataId: String,
-        offset: Long = 0
+        offset: Long = 0,
+        secondaries: List<ChunkServerAddress> = emptyList()
     ): CommitMutationResponse {
         val chunkChannel = ManagedChannelBuilder
             .forTarget(endpoint)
@@ -163,10 +164,22 @@ class GfsClient(
                     .setChunk(chunk)
                     .setDataId(dataId)
                     .setOffset(offset)
+                    .addAllSecondaries(secondaries)
                     .build()
             )
         }.also {
             chunkChannel.shutdown()
+        }
+    }
+
+    fun snapshot(sourcePath: String, destPath: String): CreateSnapshotResponse {
+        return runBlocking {
+            masterStub.createSnapshot(
+                CreateSnapshotRequest.newBuilder()
+                    .setSourcePath(sourcePath)
+                    .setDestPath(destPath)
+                    .build()
+            )
         }
     }
 

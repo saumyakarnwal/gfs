@@ -35,17 +35,18 @@ class InMemoryChunkManager : ChunkManager {
             ?: throw IllegalArgumentException("Unknown chunk handle: $handle")
         val updated = current.copy(version = current.version + 1)
         chunksByHandle[handle] = updated
-        // Update in file list too
-        chunksByFile[current.filePath]?.let { list ->
-            val idx = list.indexOfFirst { it.handle == handle }
-            if (idx >= 0) list[idx] = updated
-        }
+        updateInFileList(current.filePath, handle, updated)
         return updated.version
     }
 
     override fun removeChunksForFile(filePath: String): List<ChunkMetadata> {
         val removed = chunksByFile.remove(filePath) ?: return emptyList()
-        removed.forEach { chunksByHandle.remove(it.handle) }
+        for (chunk in removed) {
+            val newRefCount = decrementRefCount(chunk.handle)
+            if (newRefCount <= 0) {
+                chunksByHandle.remove(chunk.handle)
+            }
+        }
         return removed
     }
 
@@ -60,6 +61,53 @@ class InMemoryChunkManager : ChunkManager {
         chunks.forEach { chunk ->
             chunksByHandle[chunk.handle] = chunk
             chunksByFile.computeIfAbsent(chunk.filePath) { mutableListOf() }.add(chunk)
+        }
+    }
+
+    override fun incrementRefCount(handle: Long): Int {
+        val current = chunksByHandle[handle]
+            ?: throw IllegalArgumentException("Unknown chunk handle: $handle")
+        val updated = current.copy(referenceCount = current.referenceCount + 1)
+        chunksByHandle[handle] = updated
+        updateInFileList(current.filePath, handle, updated)
+        return updated.referenceCount
+    }
+
+    override fun decrementRefCount(handle: Long): Int {
+        val current = chunksByHandle[handle] ?: return 0
+        val newCount = (current.referenceCount - 1).coerceAtLeast(0)
+        val updated = current.copy(referenceCount = newCount)
+        chunksByHandle[handle] = updated
+        updateInFileList(current.filePath, handle, updated)
+        return newCount
+    }
+
+    override fun addChunkToFile(filePath: String, handle: Long, chunkIndex: Int) {
+        val chunk = chunksByHandle[handle]
+            ?: throw IllegalArgumentException("Unknown chunk handle: $handle")
+        val fileChunk = chunk.copy(filePath = filePath, chunkIndex = chunkIndex)
+        chunksByFile.computeIfAbsent(filePath) { mutableListOf() }.add(fileChunk)
+    }
+
+    override fun removeChunk(handle: Long) {
+        val chunk = chunksByHandle.remove(handle) ?: return
+        chunksByFile[chunk.filePath]?.removeIf { it.handle == handle }
+    }
+
+    override fun replaceChunkForFile(filePath: String, chunkIndex: Int, oldHandle: Long, newHandle: Long) {
+        val fileChunks = chunksByFile[filePath] ?: return
+        val idx = fileChunks.indexOfFirst { it.handle == oldHandle && it.chunkIndex == chunkIndex }
+        if (idx >= 0) {
+            val newChunk = chunksByHandle[newHandle]
+                ?: throw IllegalArgumentException("Unknown chunk handle: $newHandle")
+            fileChunks[idx] = newChunk.copy(filePath = filePath, chunkIndex = chunkIndex)
+        }
+    }
+
+    private fun updateInFileList(filePath: String, handle: Long, updated: ChunkMetadata) {
+        chunksByFile[filePath]?.let { list ->
+            val idx = list.indexOfFirst { it.handle == handle }
+            if (idx >= 0) list[idx] = updated
         }
     }
 }

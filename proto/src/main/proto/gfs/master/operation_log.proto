@@ -15,6 +15,7 @@ enum OperationType {
   OP_ALLOCATE_CHUNK = 4;
   OP_CREATE_SNAPSHOT = 5;
   OP_SET_REPLICATION = 6;
+  OP_COPY_ON_WRITE = 7;
 }
 
 message OperationLogEntry {
@@ -30,6 +31,7 @@ message OperationLogEntry {
     AllocateChunkOp allocate_chunk = 14;
     CreateSnapshotOp create_snapshot = 15;
     SetReplicationOp set_replication = 16;
+    CopyOnWriteOp copy_on_write = 17;
   }
 }
 
@@ -66,4 +68,11 @@ message CreateSnapshotOp {
 message SetReplicationOp {
   string path = 1;
   int32 replication_factor = 2;
+}
+
+message CopyOnWriteOp {
+  string path = 1;
+  int32 chunk_index = 2;
+  int64 old_handle = 3;
+  int64 new_handle = 4;
 }

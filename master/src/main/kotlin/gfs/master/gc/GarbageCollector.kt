@@ -17,7 +17,18 @@ class GarbageCollector(
         const val HIDDEN_PREFIX = "/.hidden/"
     }
 
+    fun ensureHiddenDirectory() {
+        if (!namespaceTree.exists(HIDDEN_PREFIX.trimEnd('/'))) {
+            try {
+                namespaceTree.createDirectory(HIDDEN_PREFIX.trimEnd('/'))
+            } catch (_: Exception) {
+                // Already exists (race condition) — fine
+            }
+        }
+    }
+
     fun start(scope: CoroutineScope) {
+        ensureHiddenDirectory()
         gcJob = scope.launch {
             while (isActive) {
                 delay(GfsConfig.GC_INTERVAL_MS)
@@ -41,9 +52,17 @@ class GarbageCollector(
                 (now - node.modifiedAt) > GfsConfig.GC_HIDDEN_FILE_TTL_MS
         }
 
-        for ((path, _) in expiredHidden) {
+        for ((path, node) in expiredHidden) {
             try {
-                chunkManager.removeChunksForFile(path)
+                // Decrement ref counts using chunk handles from the namespace node.
+                // The chunk manager's file-to-chunk mapping uses the original file path,
+                // not the hidden path, so we must work with handles directly.
+                for (handle in node.chunkHandles) {
+                    val newRefCount = chunkManager.decrementRefCount(handle)
+                    if (newRefCount <= 0) {
+                        chunkManager.removeChunk(handle)
+                    }
+                }
                 namespaceTree.delete(path)
                 logger.info("GC: collected hidden file $path")
             } catch (e: Exception) {
@@ -51,24 +70,23 @@ class GarbageCollector(
             }
         }
 
-        // Find orphaned chunks (chunks with no owning file)
+        // Find orphaned chunks (chunks not referenced by any file)
         val allFileChunks = allNodes.values
             .filter { !it.isDirectory }
             .flatMap { it.chunkHandles }
             .toSet()
 
-        val allChunks = chunkManager.getAllChunks().map { it.handle }.toSet()
-        val orphaned = allChunks - allFileChunks
+        val allChunks = chunkManager.getAllChunks()
+        val orphaned = allChunks.filter { it.handle !in allFileChunks && it.referenceCount <= 0 }
 
-        for (handle in orphaned) {
-            chunkManager.getChunkMetadata(handle)?.let { meta ->
-                chunkManager.removeChunksForFile(meta.filePath)
-                logger.info("GC: removed orphaned chunk $handle (was file ${meta.filePath})")
-            }
+        for (chunk in orphaned) {
+            chunkManager.removeChunk(chunk.handle)
+            logger.info("GC: removed orphaned chunk ${chunk.handle} (was file ${chunk.filePath})")
         }
     }
 
     fun markForDeletion(originalPath: String): String {
+        ensureHiddenDirectory()
         val hiddenPath = "$HIDDEN_PREFIX${System.currentTimeMillis()}_${originalPath.replace("/", "_")}"
         return hiddenPath
     }

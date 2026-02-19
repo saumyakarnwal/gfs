@@ -205,6 +205,22 @@ class InMemoryNamespaceTree : NamespaceTree {
         }
     }
 
+    override fun replaceChunkHandle(path: String, chunkIndex: Int, oldHandle: Long, newHandle: Long) {
+        val lock = lockForWrite(path)
+        try {
+            val node = nodes[path]
+                ?: throw NamespaceException.notFound(path)
+            require(!node.isDirectory) { "Cannot modify chunks on directory $path" }
+            val idx = node.chunkHandles.indexOf(oldHandle)
+            if (idx >= 0) {
+                node.chunkHandles[idx] = newHandle
+                node.modifiedAt = System.currentTimeMillis()
+            }
+        } finally {
+            lock.unlock()
+        }
+    }
+
     override fun setReplicationFactor(path: String, replicationFactor: Int) {
         val lock = lockForWrite(path)
         try {

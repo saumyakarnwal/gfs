@@ -18,6 +18,8 @@ interface NamespaceTree {
 
     fun addChunkHandle(path: String, chunkHandle: Long)
 
+    fun replaceChunkHandle(path: String, chunkIndex: Int, oldHandle: Long, newHandle: Long)
+
     fun setReplicationFactor(path: String, replicationFactor: Int)
 
     // Snapshot the entire namespace for checkpointing. Returns a deep copy

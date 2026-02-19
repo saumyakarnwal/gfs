@@ -136,6 +136,18 @@ class InMemoryNamespaceTreeTest {
     }
 
     @Test
+    fun `replace chunk handle`() {
+        tree.createFile("/myfile", 2)
+        tree.addChunkHandle("/myfile", 100L)
+        tree.addChunkHandle("/myfile", 200L)
+
+        tree.replaceChunkHandle("/myfile", 0, 100L, 300L)
+
+        val node = tree.getNode("/myfile")!!
+        assertEquals(listOf(300L, 200L), node.chunkHandles)
+    }
+
+    @Test
     fun `getAllNodes and restoreFrom roundtrip`() {
         tree.createDirectory("/data")
         tree.createFile("/data/file", 2)

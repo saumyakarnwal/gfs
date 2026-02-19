@@ -36,7 +36,6 @@ class GetWriteTarget(
 
         val chunkIndex = when (mutationType) {
             MutationType.RECORD_APPEND -> {
-                // Append goes to the last chunk, or creates the first one
                 if (node.chunkHandles.isEmpty()) 0 else node.chunkHandles.size - 1
             }
             else -> (offset / GfsConfig.CHUNK_SIZE_BYTES).toInt()
@@ -47,7 +46,14 @@ class GetWriteTarget(
             val chunk = allocateNewChunk(path, chunkIndex)
             chunk.handle
         } else {
-            node.chunkHandles[chunkIndex]
+            val existingHandle = node.chunkHandles[chunkIndex]
+            // Copy-on-write: if chunk is shared (refCount > 1), allocate a new chunk
+            val meta = chunkManager.getChunkMetadata(existingHandle)
+            if (meta != null && meta.referenceCount > 1) {
+                copyOnWrite(path, chunkIndex, existingHandle)
+            } else {
+                existingHandle
+            }
         }
 
         val chunkMeta = chunkManager.getChunkMetadata(chunkHandle)
@@ -58,7 +64,6 @@ class GetWriteTarget(
         // Find chunkservers that hold this chunk
         val locations = chunkServerRegistry.getLocationsForChunk(chunkHandle)
         if (locations.isEmpty()) {
-            // No chunkservers have this chunk yet — select servers and create the chunk
             val selectedServers = chunkServerRegistry.selectServersForNewChunk(node.replicationFactor)
             if (selectedServers.isEmpty()) {
                 return GetWriteTargetResponse.newBuilder()
@@ -66,7 +71,6 @@ class GetWriteTarget(
                     .build()
             }
 
-            // Grant lease and return — the client will instruct chunkservers to create the chunk
             val lease = leaseManager.grantLease(chunkHandle, selectedServers)
             return buildResponse(chunkMeta, lease)
         }
@@ -81,6 +85,33 @@ class GetWriteTarget(
         }
 
         return buildResponse(chunkMeta, lease)
+    }
+
+    private fun copyOnWrite(path: String, chunkIndex: Int, oldHandle: Long): Long {
+        // Allocate a fresh chunk for this file's exclusive use
+        val newChunk = chunkManager.allocateChunk(path, chunkIndex)
+
+        // Replace the handle in the namespace
+        namespaceTree.replaceChunkHandle(path, chunkIndex, oldHandle, newChunk.handle)
+        chunkManager.replaceChunkForFile(path, chunkIndex, oldHandle, newChunk.handle)
+
+        // Decrement the old chunk's ref count (this file no longer shares it)
+        chunkManager.decrementRefCount(oldHandle)
+
+        // WAL the copy-on-write
+        val entry = OperationLogEntry.newBuilder()
+            .setType(OperationType.OP_COPY_ON_WRITE)
+            .setCopyOnWrite(
+                CopyOnWriteOp.newBuilder()
+                    .setPath(path)
+                    .setChunkIndex(chunkIndex)
+                    .setOldHandle(oldHandle)
+                    .setNewHandle(newChunk.handle)
+            )
+            .build()
+        operationLog.append(entry)
+
+        return newChunk.handle
     }
 
     private fun allocateNewChunk(path: String, chunkIndex: Int): gfs.master.chunk.ChunkMetadata {
