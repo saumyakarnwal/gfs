@@ -12,6 +12,8 @@ import gfs.master.createfile.CreateFile
 import gfs.master.createdirectory.CreateDirectory
 import gfs.master.createsnapshot.CreateSnapshot
 import gfs.master.deletefile.DeleteFile
+import gfs.master.failuredetector.FailureDetector
+import gfs.master.gc.GarbageCollector
 import gfs.master.getfileinfo.GetFileInfo
 import gfs.master.getchunklocations.GetChunkLocations
 import gfs.master.getwritetarget.GetWriteTarget
@@ -29,6 +31,9 @@ import gfs.master.service.MasterService
 import gfs.proto.OperationType
 import io.grpc.Server
 import io.grpc.ServerBuilder
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import java.nio.file.Path
 import java.util.logging.Logger
 
@@ -37,6 +42,7 @@ class MasterServer(
     private val port: Int = GfsConfig.MASTER_PORT
 ) {
     private val logger = Logger.getLogger(MasterServer::class.java.name)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     private lateinit var namespaceTree: NamespaceTree
     private lateinit var chunkManager: ChunkManager
@@ -44,6 +50,8 @@ class MasterServer(
     private lateinit var checkpointManager: CheckpointManager
     private lateinit var chunkServerRegistry: ChunkServerRegistry
     private lateinit var leaseManager: LeaseManager
+    private lateinit var failureDetector: FailureDetector
+    private lateinit var garbageCollector: GarbageCollector
     private lateinit var grpcServer: Server
 
     fun start() {
@@ -56,13 +64,21 @@ class MasterServer(
         checkpointManager = FileCheckpointManager(dataDir.resolve("checkpoints"))
         chunkServerRegistry = InMemoryChunkServerRegistry()
         leaseManager = InMemoryLeaseManager()
+        garbageCollector = GarbageCollector(namespaceTree, chunkManager)
+
+        failureDetector = FailureDetector(
+            chunkServerRegistry, chunkManager, namespaceTree
+        ) { chunkHandle, deficit ->
+            logger.info("Re-replication needed: chunk $chunkHandle, deficit=$deficit")
+            // Instruct chunkservers via next heartbeat response
+        }
 
         // Recover state
         recover()
 
         // Wire RPC handlers
         val createFile = CreateFile(namespaceTree, operationLog)
-        val deleteFile = DeleteFile(namespaceTree, chunkManager, operationLog)
+        val deleteFile = DeleteFile(namespaceTree, operationLog, garbageCollector)
         val renameFile = RenameFile(namespaceTree, operationLog)
         val createDirectory = CreateDirectory(namespaceTree, operationLog)
         val listDirectory = ListDirectory(namespaceTree, chunkManager, chunkServerRegistry)
@@ -88,6 +104,10 @@ class MasterServer(
             .build()
             .start()
 
+        // Start background tasks
+        failureDetector.start(scope)
+        garbageCollector.start(scope)
+
         logger.info("Master server started on port $port")
 
         Runtime.getRuntime().addShutdownHook(Thread {
@@ -97,12 +117,10 @@ class MasterServer(
     }
 
     fun stop() {
-        if (::grpcServer.isInitialized) {
-            grpcServer.shutdown()
-        }
-        if (::operationLog.isInitialized) {
-            operationLog.close()
-        }
+        if (::failureDetector.isInitialized) failureDetector.stop()
+        if (::garbageCollector.isInitialized) garbageCollector.stop()
+        if (::grpcServer.isInitialized) grpcServer.shutdown()
+        if (::operationLog.isInitialized) operationLog.close()
     }
 
     fun blockUntilShutdown() {
@@ -138,8 +156,13 @@ class MasterServer(
                     namespaceTree.createFile(op.path, op.replicationFactor)
                 }
                 OperationType.OP_DELETE_FILE -> {
-                    namespaceTree.delete(entry.deleteFile.path)
-                    chunkManager.removeChunksForFile(entry.deleteFile.path)
+                    val path = entry.deleteFile.path
+                    try {
+                        namespaceTree.delete(path)
+                    } catch (_: Exception) {
+                        // File may have already been lazily moved
+                    }
+                    chunkManager.removeChunksForFile(path)
                 }
                 OperationType.OP_CREATE_DIRECTORY -> {
                     namespaceTree.createDirectory(entry.createDirectory.path)
@@ -165,7 +188,6 @@ class MasterServer(
                 }
             }
         } catch (e: Exception) {
-            // During replay, skip entries that fail (e.g., already exists from checkpoint)
             logger.fine("Replay entry ${entry.sequenceNumber} skipped: ${e.message}")
         }
     }
