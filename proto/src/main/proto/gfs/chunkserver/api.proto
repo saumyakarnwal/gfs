@@ -23,6 +23,7 @@ service ChunkServerService {
   rpc CreateChunk(CreateChunkRequest) returns (CreateChunkResponse);
   rpc DeleteChunk(DeleteChunkRequest) returns (DeleteChunkResponse);
   rpc CopyChunk(CopyChunkRequest) returns (CopyChunkResponse);
+  rpc UpdateChunkVersion(UpdateChunkVersionRequest) returns (UpdateChunkVersionResponse);
 }
 
 // Read
@@ -100,5 +101,13 @@ message CopyChunkRequest {
 }
 
 message CopyChunkResponse {
+  Status status = 1;
+}
+
+message UpdateChunkVersionRequest {
+  ChunkReference chunk = 1;
+}
+
+message UpdateChunkVersionResponse {
   Status status = 1;
 }

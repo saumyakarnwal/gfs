@@ -79,13 +79,19 @@ class GfsClient(
         }
     }
 
-    fun getWriteTarget(path: String, offset: Long = 0, mutationType: MutationType = MutationType.WRITE): GetWriteTargetResponse {
+    fun getWriteTarget(
+        path: String,
+        offset: Long = 0,
+        mutationType: MutationType = MutationType.WRITE,
+        forceNewChunk: Boolean = false
+    ): GetWriteTargetResponse {
         return runBlocking {
             masterStub.getWriteTarget(
                 GetWriteTargetRequest.newBuilder()
                     .setPath(path)
                     .setOffset(offset)
                     .setMutationType(mutationType)
+                    .setForceNewChunk(forceNewChunk)
                     .build()
             )
         }

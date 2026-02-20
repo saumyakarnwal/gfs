@@ -104,6 +104,15 @@ class InMemoryChunkManager : ChunkManager {
         }
     }
 
+    override fun renameFile(oldPath: String, newPath: String) {
+        val chunks = chunksByFile.remove(oldPath) ?: return
+        val updated = chunks.map { it.copy(filePath = newPath) }.toMutableList()
+        chunksByFile[newPath] = updated
+        for (chunk in updated) {
+            chunksByHandle[chunk.handle] = chunk
+        }
+    }
+
     private fun updateInFileList(filePath: String, handle: Long, updated: ChunkMetadata) {
         chunksByFile[filePath]?.let { list ->
             val idx = list.indexOfFirst { it.handle == handle }

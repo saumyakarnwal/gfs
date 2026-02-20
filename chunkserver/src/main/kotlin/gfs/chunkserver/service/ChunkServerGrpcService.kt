@@ -7,6 +7,7 @@ import gfs.chunkserver.createchunk.CreateChunk
 import gfs.chunkserver.deletechunk.DeleteChunk
 import gfs.chunkserver.pushdata.PushData
 import gfs.chunkserver.readchunk.ReadChunk
+import gfs.chunkserver.updatechunkversion.UpdateChunkVersion
 import gfs.common.grpc.methodImpl
 import gfs.proto.*
 
@@ -17,7 +18,8 @@ class ChunkServerGrpcService(
     private val applyMutation: ApplyMutation,
     private val createChunk: CreateChunk,
     private val deleteChunk: DeleteChunk,
-    private val copyChunk: CopyChunk
+    private val copyChunk: CopyChunk,
+    private val updateChunkVersion: UpdateChunkVersion
 ) : ChunkServerServiceGrpcKt.ChunkServerServiceCoroutineImplBase() {
 
     override suspend fun readChunk(request: ReadChunkRequest) = methodImpl {
@@ -46,5 +48,9 @@ class ChunkServerGrpcService(
 
     override suspend fun copyChunk(request: CopyChunkRequest) = methodImpl {
         copyChunk.execute(request)
+    }
+
+    override suspend fun updateChunkVersion(request: UpdateChunkVersionRequest) = methodImpl {
+        updateChunkVersion.execute(request)
     }
 }

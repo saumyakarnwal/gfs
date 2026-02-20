@@ -73,10 +73,15 @@ fun main(args: Array<String>) {
             }
 
             "put" -> {
-                require(args.size >= 3) { "Usage: put <path> <data>" }
+                require(args.size >= 3) { "Usage: put <path> [--offset N] <data>" }
                 val path = args[1]
-                val data = args.drop(2).joinToString(" ").toByteArray()
-                writeData(client, path, data, MutationType.WRITE, 0)
+                val remaining = args.drop(2)
+                val (offset, data) = if (remaining.size >= 2 && remaining[0] == "--offset") {
+                    remaining[1].toLong() to remaining.drop(2).joinToString(" ").toByteArray()
+                } else {
+                    0L to remaining.joinToString(" ").toByteArray()
+                }
+                writeData(client, path, data, MutationType.WRITE, offset)
             }
 
             "append" -> {
@@ -92,6 +97,32 @@ fun main(args: Array<String>) {
                 val offset = args.getOrNull(2)?.toLongOrNull() ?: 0
                 val length = args.getOrNull(3)?.toLongOrNull() ?: GfsConfig.CHUNK_SIZE_BYTES.toLong()
                 readData(client, path, offset, length)
+            }
+
+            "fill" -> {
+                require(args.size >= 3) { "Usage: fill <path> <sizeKB>" }
+                val path = args[1]
+                val sizeKB = args[2].toInt()
+                val totalBytes = sizeKB * 1024
+                println("Filling $path with ${sizeKB}KB (${totalBytes} bytes)...")
+
+                val chunkSize = GfsConfig.MAX_APPEND_SIZE_BYTES
+                var written = 0
+                var seq = 0
+                while (written < totalBytes) {
+                    val batchSize = minOf(chunkSize, totalBytes - written)
+                    val padding = maxOf(0, batchSize - 20)
+                    val line = "record-${seq++}-${"x".repeat(padding)}\n"
+                    val data = line.toByteArray().copyOf(batchSize)
+                    val ok = writeData(client, path, data, MutationType.RECORD_APPEND, 0)
+                    if (!ok) {
+                        println("Fill failed at $written bytes")
+                        break
+                    }
+                    written += data.size
+                    println("  written so far: $written / $totalBytes")
+                }
+                println("Done: wrote $written bytes to $path")
             }
 
             "snapshot", "snap" -> {
@@ -112,37 +143,48 @@ fun main(args: Array<String>) {
     }
 }
 
-private fun writeData(client: GfsClient, path: String, data: ByteArray, type: MutationType, offset: Long) {
-    // Step 1: Get write target from master
-    val writeResp = client.getWriteTarget(path, offset, type)
-    if (writeResp.status.code != StatusCode.OK) {
-        println("GetWriteTarget failed: ${writeResp.status.message}")
-        return
-    }
+private fun writeData(client: GfsClient, path: String, data: ByteArray, type: MutationType, offset: Long): Boolean {
+    var forceNewChunk = false
+    var retries = 0
 
-    val lease = writeResp.lease
-    val primary = lease.primary
-    val secondaries = lease.secondariesList
-    // Step 2: Push data to primary, forward to secondaries
-    val dataId = UUID.randomUUID().toString()
-    val pushResp = client.pushData(primary.endpoint, dataId, data, secondaries)
-    if (pushResp.status.code != StatusCode.OK) {
-        println("PushData failed: ${pushResp.status.message}")
-        return
-    }
+    while (retries < 3) {
+        val writeResp = client.getWriteTarget(path, offset, type, forceNewChunk)
+        if (writeResp.status.code != StatusCode.OK) {
+            println("GetWriteTarget failed: ${writeResp.status.message}")
+            return false
+        }
 
-    // Step 3: Tell primary to commit (pass secondaries so primary can forward)
-    val commitResp = client.commitMutation(primary.endpoint, type, lease.chunk, dataId, offset, secondaries)
-    if (commitResp.status.code != StatusCode.OK) {
-        println("CommitMutation failed: ${commitResp.status.message}")
-        return
-    }
+        val lease = writeResp.lease
+        val primary = lease.primary
+        val secondaries = lease.secondariesList
 
-    if (type == MutationType.RECORD_APPEND) {
-        println("Appended ${data.size} bytes at offset ${commitResp.offset}")
-    } else {
-        println("Wrote ${data.size} bytes at offset $offset")
+        val dataId = UUID.randomUUID().toString()
+        val pushResp = client.pushData(primary.endpoint, dataId, data, secondaries)
+        if (pushResp.status.code != StatusCode.OK) {
+            println("PushData failed: ${pushResp.status.message}")
+            return false
+        }
+
+        val commitResp = client.commitMutation(primary.endpoint, type, lease.chunk, dataId, offset, secondaries)
+        if (commitResp.status.code == StatusCode.CHUNK_FULL) {
+            forceNewChunk = true
+            retries++
+            continue
+        }
+        if (commitResp.status.code != StatusCode.OK) {
+            println("CommitMutation failed: ${commitResp.status.message}")
+            return false
+        }
+
+        if (type == MutationType.RECORD_APPEND) {
+            println("Appended ${data.size} bytes at offset ${commitResp.offset}")
+        } else {
+            println("Wrote ${data.size} bytes at offset $offset")
+        }
+        return true
     }
+    println("Failed after $retries retries (chunk full)")
+    return false
 }
 
 private fun readData(client: GfsClient, path: String, offset: Long, length: Long) {
@@ -222,9 +264,10 @@ private fun printUsage() {
           rename <source> <dest>           Rename a file or directory
           ls     [path]                    List directory (default: /)
           info   <path>                    Get file/directory info
-          put    <path> <data>             Write data to a file
+          put    <path> [--offset N] <data> Write data to a file (default offset: 0)
           append <path> <data>             Append data to a file
           get    <path> [offset] [length]  Read data from a file
+          fill   <path> <sizeKB>           Fill a file with generated data
           snapshot <source> <dest>         Create a snapshot (copy-on-write)
     """.trimIndent())
 }

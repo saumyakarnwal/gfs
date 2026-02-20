@@ -105,6 +105,7 @@ message GetWriteTargetRequest {
   string path = 1;
   int64 offset = 2;
   MutationType mutation_type = 3;
+  bool force_new_chunk = 4;  // Client sets this after receiving CHUNK_FULL
 }
 message GetWriteTargetResponse {
   Status status = 1;

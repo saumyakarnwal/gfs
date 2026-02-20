@@ -74,10 +74,9 @@ class HeartbeatSender(
             val response = stub!!.sendHeartbeat(request)
             handleInstructions(response.instructionsList)
         } catch (e: Exception) {
-            logger.log(Level.WARNING, "Heartbeat failed", e)
-            if (!registered) {
-                registerWithMaster()
-            }
+            logger.log(Level.WARNING, "Heartbeat failed, will re-register", e)
+            registered = false
+            registerWithMaster()
         }
     }
 

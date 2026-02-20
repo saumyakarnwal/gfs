@@ -26,6 +26,24 @@ class CreateFile(
         checkRequest(PathUtils.validate(path)) { "Invalid path: $path" }
         checkRequest(!PathUtils.isRoot(path)) { "Cannot create file at root" }
 
+        // Pre-validate before logging to keep the oplog clean
+        val parentPath = PathUtils.parentPath(path)
+        val parent = namespaceTree.getNode(parentPath)
+            ?: return CreateFileResponse.newBuilder()
+                .setStatus(status(StatusCode.NOT_FOUND, "Parent not found: $parentPath"))
+                .build()
+        if (!parent.isDirectory) {
+            return CreateFileResponse.newBuilder()
+                .setStatus(status(StatusCode.INVALID_ARGUMENT, "Parent is not a directory: $parentPath"))
+                .build()
+        }
+        if (namespaceTree.exists(path)) {
+            return CreateFileResponse.newBuilder()
+                .setStatus(status(StatusCode.ALREADY_EXISTS, "Already exists: $path"))
+                .build()
+        }
+
+        // Log → Apply: log the intent before mutating in-memory state
         val entry = OperationLogEntry.newBuilder()
             .setType(OperationType.OP_CREATE_FILE)
             .setCreateFile(
@@ -34,7 +52,6 @@ class CreateFile(
                     .setReplicationFactor(replicationFactor)
             )
             .build()
-
         operationLog.append(entry)
 
         val node = try {

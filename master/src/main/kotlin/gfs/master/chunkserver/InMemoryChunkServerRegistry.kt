@@ -27,6 +27,11 @@ class InMemoryChunkServerRegistry : ChunkServerRegistry {
         info.chunks.addAll(chunkHandles)
     }
 
+    override fun addChunkLocation(serverId: String, chunkHandle: Long) {
+        val info = servers[serverId] ?: return
+        info.chunks.add(chunkHandle)
+    }
+
     override fun getLocationsForChunk(handle: Long): List<ChunkServerAddress> {
         return servers.values
             .filter { handle in it.chunks }

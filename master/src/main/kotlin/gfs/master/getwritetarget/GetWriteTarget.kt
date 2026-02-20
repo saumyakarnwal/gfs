@@ -11,6 +11,8 @@ import gfs.master.service.checkRequest
 import gfs.master.service.okStatus
 import gfs.master.service.status
 import gfs.proto.*
+import io.grpc.ManagedChannelBuilder
+import java.util.logging.Logger
 
 class GetWriteTarget(
     private val namespaceTree: NamespaceTree,
@@ -19,6 +21,8 @@ class GetWriteTarget(
     private val leaseManager: LeaseManager,
     private val operationLog: OperationLog
 ) {
+
+    private val logger = Logger.getLogger(GetWriteTarget::class.java.name)
 
     fun execute(request: GetWriteTargetRequest): GetWriteTargetResponse {
         val path = request.path
@@ -36,7 +40,9 @@ class GetWriteTarget(
 
         val chunkIndex = when (mutationType) {
             MutationType.RECORD_APPEND -> {
-                if (node.chunkHandles.isEmpty()) 0 else node.chunkHandles.size - 1
+                if (node.chunkHandles.isEmpty()) 0
+                else if (request.forceNewChunk) node.chunkHandles.size
+                else node.chunkHandles.size - 1
             }
             else -> (offset / GfsConfig.CHUNK_SIZE_BYTES).toInt()
         }
@@ -71,6 +77,9 @@ class GetWriteTarget(
                     .build()
             }
 
+            // Tell each chunkserver to create the chunk on disk
+            createChunkOnServers(chunkHandle, chunkMeta.version, selectedServers)
+
             val lease = leaseManager.grantLease(chunkHandle, selectedServers)
             return buildResponse(chunkMeta, lease)
         }
@@ -80,11 +89,14 @@ class GetWriteTarget(
         val lease = if (existingLease != null) {
             existingLease
         } else {
-            chunkManager.incrementVersion(chunkHandle)
+            val newVersion = chunkManager.incrementVersion(chunkHandle)
+            updateVersionOnServers(chunkHandle, newVersion, locations)
             leaseManager.grantLease(chunkHandle, locations)
         }
 
-        return buildResponse(chunkMeta, lease)
+        // Re-fetch metadata after potential version bump
+        val freshMeta = chunkManager.getChunkMetadata(chunkHandle) ?: chunkMeta
+        return buildResponse(freshMeta, lease)
     }
 
     private fun copyOnWrite(path: String, chunkIndex: Int, oldHandle: Long): Long {
@@ -134,6 +146,55 @@ class GetWriteTarget(
         operationLog.append(entry)
 
         return chunk
+    }
+
+    private fun updateVersionOnServers(handle: Long, newVersion: Long, servers: List<ChunkServerAddress>) {
+        val request = UpdateChunkVersionRequest.newBuilder()
+            .setChunk(ChunkReference.newBuilder().setHandle(handle).setVersion(newVersion))
+            .build()
+
+        for (server in servers) {
+            try {
+                val channel = ManagedChannelBuilder.forTarget(server.endpoint)
+                    .usePlaintext()
+                    .build()
+                try {
+                    val stub = ChunkServerServiceGrpc.newBlockingStub(channel)
+                    stub.updateChunkVersion(request)
+                    logger.info("UpdateChunkVersion($handle→v$newVersion) on ${server.endpoint}")
+                } finally {
+                    channel.shutdown()
+                }
+            } catch (e: Exception) {
+                logger.warning("Failed to update version for chunk $handle on ${server.endpoint}: ${e.message}")
+            }
+        }
+    }
+
+    private fun createChunkOnServers(handle: Long, version: Long, servers: List<ChunkServerAddress>) {
+        val request = CreateChunkRequest.newBuilder()
+            .setChunk(ChunkReference.newBuilder().setHandle(handle).setVersion(version))
+            .build()
+
+        for (server in servers) {
+            try {
+                val channel = ManagedChannelBuilder.forTarget(server.endpoint)
+                    .usePlaintext()
+                    .build()
+                try {
+                    val stub = ChunkServerServiceGrpc.newBlockingStub(channel)
+                    val resp = stub.createChunk(request)
+                    if (resp.status.code == StatusCode.OK) {
+                        chunkServerRegistry.addChunkLocation(server.serverId, handle)
+                    }
+                    logger.info("CreateChunk($handle) on ${server.endpoint}: ${resp.status.code}")
+                } finally {
+                    channel.shutdown()
+                }
+            } catch (e: Exception) {
+                logger.warning("Failed to create chunk $handle on ${server.endpoint}: ${e.message}")
+            }
+        }
     }
 
     private fun buildResponse(

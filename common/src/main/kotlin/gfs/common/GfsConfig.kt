@@ -34,9 +34,9 @@ object GfsConfig {
     const val GC_INTERVAL_MS: Long = 30_000L
 
     // Storage paths
-    const val DATA_ROOT = "/tmp/gfs"
-    const val MASTER_DATA_DIR = "$DATA_ROOT/master"
-    const val CHUNKSERVER_DATA_DIR = "$DATA_ROOT/chunkserver"
+    val DATA_ROOT = "${System.getProperty("user.home")}/gfs-data"
+    val MASTER_DATA_DIR = "$DATA_ROOT/master"
+    val CHUNKSERVER_DATA_DIR = "$DATA_ROOT/chunkserver"
 
     // Helpers
     fun chunkserverPort(index: Int): Int = CHUNKSERVER_BASE_PORT + index

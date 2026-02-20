@@ -27,4 +27,6 @@ interface ChunkManager {
     fun removeChunk(handle: Long)
 
     fun replaceChunkForFile(filePath: String, chunkIndex: Int, oldHandle: Long, newHandle: Long)
+
+    fun renameFile(oldPath: String, newPath: String)
 }

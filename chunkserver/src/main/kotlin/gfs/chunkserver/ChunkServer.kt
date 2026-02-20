@@ -8,6 +8,7 @@ import gfs.chunkserver.deletechunk.DeleteChunk
 import gfs.chunkserver.heartbeat.HeartbeatSender
 import gfs.chunkserver.pushdata.PushData
 import gfs.chunkserver.readchunk.ReadChunk
+import gfs.chunkserver.updatechunkversion.UpdateChunkVersion
 import gfs.chunkserver.service.ChunkServerGrpcService
 import gfs.chunkserver.storage.DiskChunkStorage
 import gfs.common.GfsConfig
@@ -46,10 +47,11 @@ class ChunkServer(
         val createChunk = CreateChunk(chunkStorage)
         val deleteChunk = DeleteChunk(chunkStorage)
         val copyChunk = CopyChunk(chunkStorage)
+        val updateChunkVersion = UpdateChunkVersion(chunkStorage)
 
         val service = ChunkServerGrpcService(
             readChunk, pushData, commitMutation, applyMutation,
-            createChunk, deleteChunk, copyChunk
+            createChunk, deleteChunk, copyChunk, updateChunkVersion
         )
 
         grpcServer = ServerBuilder.forPort(port)

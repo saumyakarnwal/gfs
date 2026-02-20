@@ -79,7 +79,7 @@ class MasterServer(
         // Wire RPC handlers
         val createFile = CreateFile(namespaceTree, operationLog)
         val deleteFile = DeleteFile(namespaceTree, operationLog, garbageCollector)
-        val renameFile = RenameFile(namespaceTree, operationLog)
+        val renameFile = RenameFile(namespaceTree, chunkManager, operationLog)
         val createDirectory = CreateDirectory(namespaceTree, operationLog)
         val listDirectory = ListDirectory(namespaceTree, chunkManager, chunkServerRegistry)
         val getFileInfo = GetFileInfo(namespaceTree, chunkManager, chunkServerRegistry)
@@ -95,7 +95,7 @@ class MasterServer(
             listDirectory, getFileInfo, getChunkLocations,
             getWriteTarget, createSnapshot, setReplication
         )
-        val chunkServerService = MasterChunkServerService(chunkServerRegistry, leaseManager)
+        val chunkServerService = MasterChunkServerService(chunkServerRegistry, leaseManager, chunkManager)
 
         // Build and start gRPC server
         grpcServer = ServerBuilder.forPort(port)
@@ -170,6 +170,7 @@ class MasterServer(
                 OperationType.OP_RENAME_FILE -> {
                     val op = entry.renameFile
                     namespaceTree.rename(op.sourcePath, op.destPath)
+                    chunkManager.renameFile(op.sourcePath, op.destPath)
                 }
                 OperationType.OP_ALLOCATE_CHUNK -> {
                     val op = entry.allocateChunk

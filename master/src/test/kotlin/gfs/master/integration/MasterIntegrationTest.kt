@@ -50,7 +50,7 @@ class MasterIntegrationTest {
 
         createFile = CreateFile(namespaceTree, operationLog)
         deleteFile = DeleteFile(namespaceTree, operationLog, garbageCollector)
-        renameFile = RenameFile(namespaceTree, operationLog)
+        renameFile = RenameFile(namespaceTree, chunkManager, operationLog)
         createDirectory = CreateDirectory(namespaceTree, operationLog)
         listDirectory = ListDirectory(namespaceTree, chunkManager, chunkServerRegistry)
         getFileInfo = GetFileInfo(namespaceTree, chunkManager, chunkServerRegistry)

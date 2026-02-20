@@ -8,6 +8,11 @@ application {
     mainClass.set("gfs.master.MasterServerKt")
 }
 
+tasks.register<JavaExec>("dumpOplog") {
+    mainClass.set("gfs.master.OplogDumpKt")
+    classpath = sourceSets["main"].runtimeClasspath
+}
+
 dependencies {
     implementation(project(":common"))
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")

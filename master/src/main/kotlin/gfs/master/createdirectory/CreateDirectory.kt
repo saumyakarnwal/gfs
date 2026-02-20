@@ -20,13 +20,30 @@ class CreateDirectory(
         checkRequest(PathUtils.validate(path)) { "Invalid path: $path" }
         checkRequest(!PathUtils.isRoot(path)) { "Cannot create directory at root" }
 
+        // Pre-validate before logging to keep the oplog clean
+        val parentPath = PathUtils.parentPath(path)
+        val parent = namespaceTree.getNode(parentPath)
+            ?: return CreateDirectoryResponse.newBuilder()
+                .setStatus(status(StatusCode.NOT_FOUND, "Parent not found: $parentPath"))
+                .build()
+        if (!parent.isDirectory) {
+            return CreateDirectoryResponse.newBuilder()
+                .setStatus(status(StatusCode.INVALID_ARGUMENT, "Parent is not a directory: $parentPath"))
+                .build()
+        }
+        if (namespaceTree.exists(path)) {
+            return CreateDirectoryResponse.newBuilder()
+                .setStatus(status(StatusCode.ALREADY_EXISTS, "Already exists: $path"))
+                .build()
+        }
+
+        // Log → Apply
         val entry = OperationLogEntry.newBuilder()
             .setType(OperationType.OP_CREATE_DIRECTORY)
             .setCreateDirectory(
                 CreateDirectoryOp.newBuilder().setPath(path)
             )
             .build()
-
         operationLog.append(entry)
 
         try {

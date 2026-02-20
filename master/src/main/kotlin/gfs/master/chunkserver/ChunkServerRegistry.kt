@@ -8,6 +8,8 @@ interface ChunkServerRegistry {
 
     fun updateHeartbeat(serverId: String, chunkHandles: Set<Long>, availableBytes: Long)
 
+    fun addChunkLocation(serverId: String, chunkHandle: Long)
+
     fun getLocationsForChunk(handle: Long): List<ChunkServerAddress>
 
     fun selectServersForNewChunk(replicationFactor: Int, exclude: Set<String> = emptySet()): List<ChunkServerAddress>
