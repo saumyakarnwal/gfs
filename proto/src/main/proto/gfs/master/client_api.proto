@@ -28,6 +28,9 @@ service MasterService {
 
   // Write — client asks "who do I write to for this file at this offset?"
   rpc GetWriteTarget(GetWriteTargetRequest) returns (GetWriteTargetResponse);
+
+  // File size — client reports actual bytes after a write
+  rpc ReportFileSize(ReportFileSizeRequest) returns (ReportFileSizeResponse);
 }
 
 // Namespace
@@ -121,4 +124,14 @@ message SetReplicationRequest {
 message SetReplicationResponse {
   Status status = 1;
   int32 previous_replication_factor = 2;
+}
+
+// File size
+
+message ReportFileSizeRequest {
+  string path = 1;
+  int64 file_size = 2;
+}
+message ReportFileSizeResponse {
+  Status status = 1;
 }

@@ -22,6 +22,8 @@ interface NamespaceTree {
 
     fun setReplicationFactor(path: String, replicationFactor: Int)
 
+    fun updateFileSize(path: String, newSize: Long)
+
     // Snapshot the entire namespace for checkpointing. Returns a deep copy
     // so the checkpoint can be serialized without holding locks.
     fun getAllNodes(): Map<String, NamespaceNode>

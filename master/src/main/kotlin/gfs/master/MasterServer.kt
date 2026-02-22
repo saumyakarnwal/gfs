@@ -93,7 +93,8 @@ class MasterServer(
         val masterService = MasterService(
             createFile, deleteFile, renameFile, createDirectory,
             listDirectory, getFileInfo, getChunkLocations,
-            getWriteTarget, createSnapshot, setReplication
+            getWriteTarget, createSnapshot, setReplication,
+            namespaceTree
         )
         val chunkServerService = MasterChunkServerService(chunkServerRegistry, leaseManager, chunkManager)
 
@@ -185,6 +186,7 @@ class MasterServer(
                     val op = entry.createSnapshot
                     val sourceNode = namespaceTree.getNode(op.sourcePath) ?: return
                     namespaceTree.createFile(op.destPath, sourceNode.replicationFactor)
+                    namespaceTree.updateFileSize(op.destPath, sourceNode.fileSize)
                     for (handle in sourceNode.chunkHandles) {
                         val meta = chunkManager.getChunkMetadata(handle) ?: continue
                         chunkManager.incrementRefCount(handle)

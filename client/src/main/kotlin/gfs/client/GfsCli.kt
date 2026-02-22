@@ -176,11 +176,14 @@ private fun writeData(client: GfsClient, path: String, data: ByteArray, type: Mu
             return false
         }
 
-        if (type == MutationType.RECORD_APPEND) {
+        val newFileSize = if (type == MutationType.RECORD_APPEND) {
             println("Appended ${data.size} bytes at offset ${commitResp.offset}")
+            commitResp.offset + data.size
         } else {
             println("Wrote ${data.size} bytes at offset $offset")
+            offset + data.size
         }
+        client.reportFileSize(path, newFileSize)
         return true
     }
     println("Failed after $retries retries (chunk full)")
@@ -200,18 +203,22 @@ private fun readData(client: GfsClient, path: String, offset: Long, length: Long
     }
 
     val result = StringBuilder()
-    for (chunkInfo in locResp.chunksList) {
+    var bytesRemaining = length
+
+    for ((i, chunkInfo) in locResp.chunksList.withIndex()) {
         if (chunkInfo.locationsList.isEmpty()) {
             println("Warning: no locations for chunk ${chunkInfo.chunk.handle}")
             continue
         }
 
-        val location = chunkInfo.locationsList.first()
-        val chunkOffset = 0L
-        val chunkLength = GfsConfig.CHUNK_SIZE_BYTES
+        // Compute the byte range this chunk covers in the file
+        val chunkStartInFile = ((offset / GfsConfig.CHUNK_SIZE_BYTES) + i) * GfsConfig.CHUNK_SIZE_BYTES
+        val readStart = (offset - chunkStartInFile).coerceAtLeast(0)
+        val readLength = bytesRemaining.coerceAtMost(GfsConfig.CHUNK_SIZE_BYTES.toLong() - readStart)
 
+        val location = chunkInfo.locationsList.first()
         val readResp = client.readChunk(
-            location.endpoint, chunkInfo.chunk, chunkOffset, chunkLength
+            location.endpoint, chunkInfo.chunk, readStart, readLength.toInt()
         )
         if (readResp.status.code != StatusCode.OK) {
             println("ReadChunk failed on ${location.endpoint}: ${readResp.status.message}")
@@ -219,6 +226,8 @@ private fun readData(client: GfsClient, path: String, offset: Long, length: Long
         }
 
         result.append(readResp.data.toStringUtf8())
+        bytesRemaining -= readResp.data.size()
+        if (bytesRemaining <= 0) break
     }
 
     println(result.toString())

@@ -8,6 +8,7 @@ import gfs.master.getfileinfo.GetFileInfo
 import gfs.master.getchunklocations.GetChunkLocations
 import gfs.master.getwritetarget.GetWriteTarget
 import gfs.master.listdirectory.ListDirectory
+import gfs.master.namespace.NamespaceTree
 import gfs.master.renamefile.RenameFile
 import gfs.master.setreplication.SetReplication
 import gfs.proto.*
@@ -22,7 +23,8 @@ class MasterService(
     private val getChunkLocations: GetChunkLocations,
     private val getWriteTarget: GetWriteTarget,
     private val createSnapshot: CreateSnapshot,
-    private val setReplication: SetReplication
+    private val setReplication: SetReplication,
+    private val namespaceTree: NamespaceTree
 ) : MasterServiceGrpcKt.MasterServiceCoroutineImplBase() {
 
     override suspend fun createFile(request: CreateFileRequest) = methodImpl {
@@ -63,5 +65,12 @@ class MasterService(
 
     override suspend fun setReplication(request: SetReplicationRequest) = methodImpl {
         setReplication.execute(request)
+    }
+
+    override suspend fun reportFileSize(request: ReportFileSizeRequest) = methodImpl {
+        namespaceTree.updateFileSize(request.path, request.fileSize)
+        ReportFileSizeResponse.newBuilder()
+            .setStatus(okStatus())
+            .build()
     }
 }

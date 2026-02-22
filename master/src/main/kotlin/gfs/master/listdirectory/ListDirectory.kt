@@ -1,6 +1,5 @@
 package gfs.master.listdirectory
 
-import gfs.common.GfsConfig
 import gfs.master.chunk.ChunkManager
 import gfs.master.chunkserver.ChunkServerRegistry
 import gfs.master.namespace.NamespaceException
@@ -60,8 +59,7 @@ class ListDirectory(
                     .build()
             }
             builder.addAllChunks(chunkInfos)
-            // Upper bound — exact size of the last chunk is only known by chunkservers
-            builder.fileSize = chunks.size.toLong() * GfsConfig.CHUNK_SIZE_BYTES
+            builder.fileSize = fileSize
         }
 
         return builder.build()

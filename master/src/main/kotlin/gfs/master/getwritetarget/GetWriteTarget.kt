@@ -53,10 +53,22 @@ class GetWriteTarget(
             chunk.handle
         } else {
             val existingHandle = node.chunkHandles[chunkIndex]
-            // Copy-on-write: if chunk is shared (refCount > 1), allocate a new chunk
             val meta = chunkManager.getChunkMetadata(existingHandle)
             if (meta != null && meta.referenceCount > 1) {
-                copyOnWrite(path, chunkIndex, existingHandle)
+                // Copy-on-write: snapshot shares this chunk, need a private copy
+                val oldLocations = chunkServerRegistry.getLocationsForChunk(existingHandle)
+                val oldVersion = meta.version
+                val newHandle = copyOnWrite(path, chunkIndex, existingHandle)
+                val newMeta = chunkManager.getChunkMetadata(newHandle)!!
+
+                if (oldLocations.isNotEmpty()) {
+                    // Copy data: tell each server to read old chunk locally and write to new chunk
+                    copyChunkOnServers(newHandle, newMeta.version, existingHandle, oldVersion, oldLocations)
+                    val lease = leaseManager.grantLease(newHandle, oldLocations)
+                    return buildResponse(newMeta, lease)
+                }
+                // Fall through if old locations empty (servers not yet reporting)
+                newHandle
             } else {
                 existingHandle
             }
@@ -167,6 +179,39 @@ class GetWriteTarget(
                 }
             } catch (e: Exception) {
                 logger.warning("Failed to update version for chunk $handle on ${server.endpoint}: ${e.message}")
+            }
+        }
+    }
+
+    private fun copyChunkOnServers(
+        newHandle: Long, newVersion: Long,
+        oldHandle: Long, oldVersion: Long,
+        servers: List<ChunkServerAddress>
+    ) {
+        val request = CopyChunkRequest.newBuilder()
+            .setChunk(ChunkReference.newBuilder().setHandle(newHandle).setVersion(newVersion))
+            .setSourceChunk(ChunkReference.newBuilder().setHandle(oldHandle).setVersion(oldVersion))
+            .build()
+
+        for (server in servers) {
+            try {
+                val channel = ManagedChannelBuilder.forTarget(server.endpoint)
+                    .usePlaintext()
+                    .build()
+                try {
+                    // Source is the server itself — old chunk data is already local
+                    val reqWithSource = request.toBuilder().setSource(server).build()
+                    val stub = ChunkServerServiceGrpc.newBlockingStub(channel)
+                    val resp = stub.copyChunk(reqWithSource)
+                    if (resp.status.code == StatusCode.OK) {
+                        chunkServerRegistry.addChunkLocation(server.serverId, newHandle)
+                    }
+                    logger.info("CopyChunkData($oldHandle→$newHandle) on ${server.endpoint}: ${resp.status.code}")
+                } finally {
+                    channel.shutdown()
+                }
+            } catch (e: Exception) {
+                logger.warning("Failed to copy chunk $oldHandle→$newHandle on ${server.endpoint}: ${e.message}")
             }
         }
     }

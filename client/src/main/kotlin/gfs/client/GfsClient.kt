@@ -178,6 +178,17 @@ class GfsClient(
         }
     }
 
+    fun reportFileSize(path: String, fileSize: Long): ReportFileSizeResponse {
+        return runBlocking {
+            masterStub.reportFileSize(
+                ReportFileSizeRequest.newBuilder()
+                    .setPath(path)
+                    .setFileSize(fileSize)
+                    .build()
+            )
+        }
+    }
+
     fun snapshot(sourcePath: String, destPath: String): CreateSnapshotResponse {
         return runBlocking {
             masterStub.createSnapshot(

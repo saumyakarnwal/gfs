@@ -233,6 +233,19 @@ class InMemoryNamespaceTree : NamespaceTree {
         }
     }
 
+    override fun updateFileSize(path: String, newSize: Long) {
+        val lock = lockForWrite(path)
+        try {
+            val node = nodes[path] ?: return
+            if (!node.isDirectory && newSize > node.fileSize) {
+                node.fileSize = newSize
+                node.modifiedAt = System.currentTimeMillis()
+            }
+        } finally {
+            lock.unlock()
+        }
+    }
+
     override fun getAllNodes(): Map<String, NamespaceNode> = HashMap(nodes)
 
     override fun restoreFrom(nodes: Map<String, NamespaceNode>) {

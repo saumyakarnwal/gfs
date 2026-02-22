@@ -16,6 +16,7 @@ class CopyChunk(private val chunkStorage: ChunkStorage) {
         val chunkHandle = request.chunk.handle
         val version = request.chunk.version
         val source = request.source
+        val sourceChunk = if (request.hasSourceChunk()) request.sourceChunk else request.chunk
 
         if (chunkStorage.hasChunk(chunkHandle)) {
             return CopyChunkResponse.newBuilder()
@@ -24,7 +25,7 @@ class CopyChunk(private val chunkStorage: ChunkStorage) {
         }
 
         return try {
-            // Read from source chunkserver
+            // Read from source chunkserver (may be reading a different chunk handle for COW)
             val channel = ManagedChannelBuilder
                 .forTarget(source.endpoint)
                 .usePlaintext()
@@ -32,7 +33,7 @@ class CopyChunk(private val chunkStorage: ChunkStorage) {
             val stub = ChunkServerServiceGrpc.newBlockingStub(channel)
 
             val readRequest = ReadChunkRequest.newBuilder()
-                .setChunk(request.chunk)
+                .setChunk(sourceChunk)
                 .setOffset(0)
                 .setLength(gfs.common.GfsConfig.CHUNK_SIZE_BYTES)
                 .build()

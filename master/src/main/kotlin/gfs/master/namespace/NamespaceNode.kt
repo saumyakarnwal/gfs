@@ -17,5 +17,6 @@ data class NamespaceNode(
     val createdAt: Long,
     var modifiedAt: Long,
     var replicationFactor: Int,
-    val chunkHandles: MutableList<Long> = mutableListOf()
+    val chunkHandles: MutableList<Long> = mutableListOf(),
+    var fileSize: Long = 0
 )

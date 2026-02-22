@@ -50,8 +50,9 @@ class CreateSnapshot(
         operationLog.append(entry)
 
         try {
-            // Create the snapshot file with the same replication factor
+            // Create the snapshot file with the same replication factor and size
             namespaceTree.createFile(destPath, sourceNode.replicationFactor)
+            namespaceTree.updateFileSize(destPath, sourceNode.fileSize)
 
             // Share all chunk handles — increment ref counts
             for (handle in sourceNode.chunkHandles) {

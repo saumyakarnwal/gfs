@@ -96,8 +96,9 @@ message DeleteChunkResponse {
 }
 
 message CopyChunkRequest {
-  ChunkReference chunk = 1;
-  ChunkServerAddress source = 2;
+  ChunkReference chunk = 1;              // destination chunk to create locally
+  ChunkServerAddress source = 2;         // server to read from
+  ChunkReference source_chunk = 3;       // chunk to read from source (defaults to `chunk` if unset)
 }
 
 message CopyChunkResponse {
