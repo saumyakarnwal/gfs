@@ -194,7 +194,7 @@ class MasterServer(
                 }
                 OperationType.OP_COPY_ON_WRITE -> {
                     val op = entry.copyOnWrite
-                    chunkManager.allocateChunk(op.path, op.chunkIndex)
+                    chunkManager.allocateChunkHandle(op.path, op.chunkIndex)
                     namespaceTree.replaceChunkHandle(op.path, op.chunkIndex, op.oldHandle, op.newHandle)
                     chunkManager.replaceChunkForFile(op.path, op.chunkIndex, op.oldHandle, op.newHandle)
                     chunkManager.decrementRefCount(op.oldHandle)

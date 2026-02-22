@@ -32,10 +32,13 @@ class GetChunkLocations(
 
         checkRequest(!node.isDirectory) { "Cannot get chunk locations for directory: $path" }
 
-        val startChunkIndex = (offset / GfsConfig.CHUNK_SIZE_BYTES).toInt()
-        val endChunkIndex = ((offset + length - 1) / GfsConfig.CHUNK_SIZE_BYTES).toInt()
-
         val allChunks = chunkManager.getChunksForFile(path)
+        val maxIndex = (allChunks.size - 1).coerceAtLeast(0)
+
+        val startChunkIndex = (offset / GfsConfig.CHUNK_SIZE_BYTES).coerceIn(0, maxIndex.toLong()).toInt()
+        val endChunkIndex = ((offset + length - 1).coerceAtLeast(0) / GfsConfig.CHUNK_SIZE_BYTES)
+            .coerceIn(0, maxIndex.toLong()).toInt()
+
         val chunkInfos = (startChunkIndex..endChunkIndex)
             .filter { it < allChunks.size }
             .map { idx ->

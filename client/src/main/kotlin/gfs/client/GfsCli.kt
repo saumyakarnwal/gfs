@@ -95,7 +95,7 @@ fun main(args: Array<String>) {
                 require(args.size >= 2) { "Usage: get <path> [offset] [length]" }
                 val path = args[1]
                 val offset = args.getOrNull(2)?.toLongOrNull() ?: 0
-                val length = args.getOrNull(3)?.toLongOrNull() ?: GfsConfig.CHUNK_SIZE_BYTES.toLong()
+                val length = args.getOrNull(3)?.toLongOrNull() ?: Long.MAX_VALUE
                 readData(client, path, offset, length)
             }
 

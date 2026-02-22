@@ -28,5 +28,9 @@ interface ChunkManager {
 
     fun replaceChunkForFile(filePath: String, chunkIndex: Int, oldHandle: Long, newHandle: Long)
 
+    // Allocates a handle and creates metadata without adding to the file's chunk list.
+    // Used by copy-on-write where replaceChunkForFile handles placement.
+    fun allocateChunkHandle(filePath: String, chunkIndex: Int): ChunkMetadata
+
     fun renameFile(oldPath: String, newPath: String)
 }

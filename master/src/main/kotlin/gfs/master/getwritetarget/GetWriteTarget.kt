@@ -100,8 +100,8 @@ class GetWriteTarget(
     }
 
     private fun copyOnWrite(path: String, chunkIndex: Int, oldHandle: Long): Long {
-        // Allocate a fresh chunk for this file's exclusive use
-        val newChunk = chunkManager.allocateChunk(path, chunkIndex)
+        // Allocate a handle without adding to the file's chunk list (replaceChunkForFile does that)
+        val newChunk = chunkManager.allocateChunkHandle(path, chunkIndex)
 
         // Replace the handle in the namespace
         namespaceTree.replaceChunkHandle(path, chunkIndex, oldHandle, newChunk.handle)

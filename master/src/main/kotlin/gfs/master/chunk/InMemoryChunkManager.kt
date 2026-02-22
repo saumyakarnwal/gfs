@@ -94,6 +94,18 @@ class InMemoryChunkManager : ChunkManager {
         chunksByFile[chunk.filePath]?.removeIf { it.handle == handle }
     }
 
+    override fun allocateChunkHandle(filePath: String, chunkIndex: Int): ChunkMetadata {
+        val handle = nextHandle.getAndIncrement()
+        val chunk = ChunkMetadata(
+            handle = handle,
+            version = 1,
+            filePath = filePath,
+            chunkIndex = chunkIndex
+        )
+        chunksByHandle[handle] = chunk
+        return chunk
+    }
+
     override fun replaceChunkForFile(filePath: String, chunkIndex: Int, oldHandle: Long, newHandle: Long) {
         val fileChunks = chunksByFile[filePath] ?: return
         val idx = fileChunks.indexOfFirst { it.handle == oldHandle && it.chunkIndex == chunkIndex }
